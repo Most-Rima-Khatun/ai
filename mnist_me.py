@@ -1,0 +1,134 @@
+import numpy as np
+import matplotlib.pyplot as plt
+import tensorflow as tf
+
+from tensorflow.keras.datasets import mnist
+from tensorflow.keras.layers import Dense, Input, Conv2D, MaxPooling2D, Dropout,Flatten
+from tensorflow.keras.models import Sequential
+from sklearn.model_selection import train_test_split
+from tensorflow.keras.callbacks import EarlyStopping
+
+(X_train , y_train),(X_test, y_test) = mnist.load_data()
+
+print(X_train.shape)
+print(y_train.shape)
+
+X_train = X_train / 255.0
+X_test = X_test / 255.0
+
+
+print(X_train)
+
+X_train = X_train.reshape(-1, 28, 28, 1)
+X_test = X_test.reshape(-1, 28, 28, 1)
+
+X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size = 0.10, stratify = y_train)
+
+model = Sequential()
+
+model.add(Conv2D(
+	32, 
+	kernel_size = (3,3), 
+	strides =(1,1),
+	activation = 'relu', 
+	padding = 'same', 
+	input_shape = (28,28,1)))
+model.add(MaxPooling2D(pool_size = (2, 2)))
+model.add(Dropout(0.25))
+
+model.add(Conv2D(
+	64, 
+	kernel_size = (3,3), 
+	strides = (1,1), 
+	activation = 'relu',
+	padding = 'same'))
+model.add(MaxPooling2D(pool_size = (2, 2)))
+model.add(Dropout(0.25))
+model.add(Flatten())
+
+model.add(Dense(64,activation = 'relu'))
+model.add(Dropout(0.5))
+model.add(Dense(10, activation = 'softmax'))
+
+model.summary()
+
+model.compile(
+loss = 'sparse_categorical_crossentropy',
+optimizer = 'adam',
+metrics = ['accuracy'])
+
+early_stopping = EarlyStopping(
+monitor = 'val_loss',
+patience = 5,
+restore_best_weights = True)
+
+
+
+history = model.fit(
+X_train,
+y_train,
+epochs = 2,
+validation_data = (X_val, y_val),
+callbacks =[early_stopping])
+
+
+plt.plot(history.history['accuracy'],label = 'Training Accuracy')
+plt.plot(history.history['val_accuracy'],label = 'Validation(testing) accuracy')
+plt.xlabel('epochs')
+plt.ylabel('accuracy')
+plt.title('Training vs testing accuracy graph')
+plt.legend()
+plt.tight_layout()
+plt.show()
+
+
+plt.plot(history.history['loss'], label = 'Training loss')
+plt.plot(history.history['val_loss'],label = 'testing loss')
+plt.xlabel('epochs')
+plt.ylabel('loss')
+plt.title('Training vs testing loss graph')
+plt.legend()
+plt.tight_layout()
+plt.show()
+
+
+test_loss, test_accuracy = model.evaluate(X_test,y_test)
+
+print(f'test loss: {test_loss: .5f}')
+print(f'test accuracy : {test_accuracy: .5f}')
+
+
+predictions = model.predict(X_test)
+prediction_label = np.argmax(predictions, axis = 1)
+
+random_indices = np.random.choice(len(X_test), 10, replace = False)
+plt.figure(figsize = (12, 5))
+
+
+for i, idx in enumerate(random_indices):
+	plt.subplot(2, 5, i + 1)
+	plt.imshow(X_test[idx].squeeze(),cmap = 'gray')
+	plt.title(f'True_val : {y_test[idx]},\nPredicted : 	{prediction_label[idx]}')
+	plt.axis('off')
+	plt.tight_layout()
+	plt.show()
+
+
+
+odd_indices = np.where(y_test % 2 != 0)[0]
+
+selected_odd_indices = np.random.choice(odd_indices,10, replace = False)
+
+plt.figure(figsize=(12,5))
+for i, idx in enumerate(selected_odd_indices):
+	plt.subplot(2, 5, i + 1)
+	plt.imshow(X_test[idx].squeeze(),cmap='gray')
+	plt.axis('off')
+	plt.show()
+
+
+
+
+
+
+print("done")
