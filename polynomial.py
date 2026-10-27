@@ -1,134 +1,74 @@
-#Libraries 
 import numpy as np
-import matplotlib.pyplot as plt
 import tensorflow as tf
+import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import MinMaxScaler
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense
+from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
 
-from tensorflow.keras.layers import Dense , Input, Activation
-from tensorflow.keras.models import Model
-from tensorflow.keras import metrics
-from tensorflow.keras.callbacks import EarlyStopping
-# function 
+tf.keras.utils.set_random_seed(42)
 
-def polynomial(x):
- return 5 * x ** 3 - 10 * x ** 2 - 20 * x + 10
- 
-#seeding
+x = np.random.uniform(-20, 20, 5000).reshape(-1, 1)
+y = 5 * (x**4) - 10 * (x**3) - x + 5
 
-np.random.seed(42)
+scaler_x = MinMaxScaler(feature_range=(-1, 1))
+scaler_y = MinMaxScaler(feature_range=(-1, 1))
+x_scaled = scaler_x.fit_transform(x)
+y_scaled = scaler_y.fit_transform(y)
 
-x_samples = np.random.uniform(-20, 20, 10000)
-y_samples = polynomial(x_samples)
+x_temp, x_test, y_temp, y_test = train_test_split(x_scaled, y_scaled, test_size=0.1, random_state=42)
+x_train, x_val, y_train, y_val = train_test_split(x_temp, y_temp, test_size=0.1111, random_state=42)
 
-#normalize
+model = Sequential([
+    Dense(64, activation='relu', input_shape=(1,)),
+    Dense(128, activation='relu'),
+    Dense(64, activation='relu'),
+    Dense(1, activation='linear')
+])
 
-x_normalized = (x_samples - np.min(x_samples)) / (np.max(x_samples) - np.min(x_samples)) * 2 - 1
-#y_normalized = (y_samples - np.min(y_samples)) / (np.max(y_samples) - np.min(y_samples)) * 2 - 1
+model.compile(optimizer='adam', loss='mse', metrics=['mae'])
 
-# train, test, val
+callbacks = [
+    EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True),
+    ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=5, min_lr=1e-6)
+]
 
-test_size = int(0.5 * len(x_samples))
-val_size = int (0.05 * len(x_samples))
-train_size = len(x_samples) - test_size - val_size 
-
-x_train, x_val, x_test = (
-	x_normalized[:train_size],
-	x_normalized[train_size : train_size + val_size],
-	x_normalized[train_size + val_size :],
-)
-
-#y_train, y_val, y_test = (
-	#y_normalized[:train_size],
-	#y_normalized[train_size : train_size + val_size],
-	#y_normalized[train_size + val_size :],
-#)
-
-y_train, y_val, y_test = (
-	y_samples[:train_size],
-	y_samples[train_size : train_size + val_size],
-	y_samples[train_size + val_size :]
-)
-
-inputs = Input((1,), name = "InputLayer")
-
-x = Dense(16, activation = "relu" , name = "Hiddenlayer1")(inputs)
-x = Dense(32, activation = "relu" , name = "Hiddenlayer2")(x)
-x = Dense(64, activation = "relu" , name = "Hiddenlayer3")(x)
-x = Dense(128, activation = "relu" , name = "Hiddenlayer4")(x)
-
-outputs = Dense(1, name = "Outputlayer")(x)
-model = Model(inputs,outputs)
-model.summary()
-
-model.compile(
-	optimizer = tf.keras.optimizers.Adam(learning_rate = 1e-3),
-	loss = 'mean_squared_error',
-	metrics = [metrics.R2Score(name = 'accuracy')]
-)
-
-early_stopping = EarlyStopping(
-	monitor = 'val_loss',
-	patience = 25, 
-	restore_best_weights = True
-)
 history = model.fit(
-	x_train,
-	y_train,
-	epochs = 100,
-	validation_data = (x_val, y_val),
-	batch_size = 32,
-	callbacks = [early_stopping],
-	verbose = 1
+    x_train, y_train,
+    validation_data=(x_val, y_val),
+    epochs=100,
+    batch_size=32,
+    callbacks=callbacks,
+    verbose=1
 )
-model.evaluate(x_test, y_test)
-model.predict(x_test)
 
-plt.figure(figsize=(10, 6))
+test_loss, test_mae = model.evaluate(x_test, y_test, verbose=0)
+val_loss, val_mae = model.evaluate(x_val, y_val, verbose=0)
 
-plt.subplot(2,2,1)
-plt.plot(history.history['accuracy'],label = 'train accuracy')
-plt.plot(history.history['val_accuracy'], label = 'Val Accuracy')
-plt.title("Accuracy")
-plt.xlabel("Epoch")
-plt.ylabel("Accuracy")
-plt.legend()
-plt.grid(True)
+print("\n--- Results ---")
+print(f"Test Loss (MSE): {test_loss:.4f}")
+print(f"Test MAE: {test_mae:.4f}")
+print(f"Val Loss (MSE): {val_loss:.4f}")
+print(f"Val MAE: {val_mae:.4f}\n")
 
-plt.subplot(2,2,2)
-plt.plot(history.history['loss'],label = 'train loss')
-plt.plot(history.history['val_loss'], label = 'Val loss')
-plt.title("loss")
-plt.xlabel("Epoch")
-plt.ylabel("loss")
+plt.figure(figsize=(10, 4))
+
+plt.subplot(1, 2, 1)
+plt.plot(history.history['mae'], label='Train MAE')
+plt.plot(history.history['val_mae'], label='Val MAE')
+plt.title('Mean Absolute Error (MAE)')
 plt.legend()
 
-plt.grid(True)
+plt.subplot(1, 2, 2)
+plt.plot(history.history['loss'], label='Train Loss')
+plt.plot(history.history['val_loss'], label='Val Loss')
+plt.title('Loss (MSE)')
+plt.legend()
+
 plt.tight_layout()
+
+print("Real X:", scaler_x.inverse_transform(x_test).flatten()[:5])
+print("Pred Y:", scaler_y.inverse_transform(model.predict(x_test, verbose=0)).flatten()[:5])
+
 plt.show()
-
-print("done")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
